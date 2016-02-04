@@ -24,58 +24,39 @@ def decimalStr(num):
 def omega_2d(kx, ky, mass):
   return np.sqrt( 4*np.sin(kx/2.0)**2 + 4*np.sin(ky/2.0)**2 + mass**2 )
 
-##################################  getPhiPhiCorrelator_2d  ###################################
-# Calculates the phi-phi correlator for a 1D free bosonic system
+#####################################  getCorrelators_2d  #####################################
+# Calculates the phi-phi and pi-pi correlator for a 2D free bosonic system
 # Input paramters: 
 #    L: length of lattice (integer)
-#    bc: boundary conditions ('PBC' or 'APBC')
+#    bc_x: boundary conditions along x ('PBC' or 'APBC')
+#    bc_y: boundary conditions along y ('PBC' or 'APBC')
 #    mass: boson mass (float)
 #    r, rprime: (x,y) coordinates on lattice of the two phi variables (floats)
 ###############################################################################################
-def getPhiPhiCorrelator_2d(L, bc, mass, r, rprime):
-  corr = 0
-  
+def getCorrelators_2d(L, bc_x, bc_y, mass, r, rprime):
   (x,y) = r
   (xprime, yprime ) = rprime
   
-  if bc == 'PBC':
+  #BC along x:
+  if bc_x == 'PBC':
     kx = (2*np.array(range(0,L)))*np.pi/L
-    ky = (2*np.array(range(0,L)))*np.pi/L
-  else: #APBC
+  else: #APBC along x
     kx = ( 2*np.array(range(0,L)) + 1)*np.pi/L
-    ky = ( 2*np.array(range(0,L)) + 1)*np.pi/L
   
-  corr = sum( [ sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))/omega_2d(kx,kyy,mass) ) for kyy in ky] )
-  #corr = sum( [np.cos(kxx*(x-xprime))*np.cos(kyy*(y-yprime))/omega_2d(kxx,kyy) for kxx in kx for kyy in ky] )
-
-  return corr/(2*L**2)
-
-###################################  getPiPiCorrelator_1d  ####################################
-# Calculates the pi-pi correlator for a 1D free bosonic system
-# Input paramters: 
-#    L: length of lattice (integer)
-#    bc: boundary conditions ('PBC' or 'APBC')
-#    mass: boson mass (float)
-#    r, rprime: (x,y) coordinates on lattice of the two phi variables (floats)
-###############################################################################################
-def getPiPiCorrelator_2d(L, bc, mass, r, rprime):
-  corr = 0
-  
-  (x,y) = r
-  (xprime, yprime ) = rprime
-  
-  if bc == 'PBC':
-    kx = (2*np.array(range(0,L)))*np.pi/L
+  #BC along y:
+  if bc_y == 'PBC':
     ky = (2*np.array(range(0,L)))*np.pi/L
-  else: #APBC
-    kx = ( 2*np.array(range(0,L)) + 1)*np.pi/L
-    ky = ( 2*np.array(range(0,L)) + 1)*np.pi/L
+  else: #APBC along y
+    ky = ( 2*np.array(range(0,L)) + 1)*np.pi/L 
   
-  corr = sum( [ sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))*omega_2d(kx,kyy,mass) ) for kyy in ky] )
-  #corr = sum( [np.cos(kxx*(x-xprime))*np.cos(kyy*(y-yprime))/omega_2d(kxx,kyy) for kxx in kx for kyy in ky] )
+  phiphi = 0
+  pipi   = 0
+  for kyy in ky:
+    omega = omega_2d(kx,kyy,mass)
+    phiphi = phiphi + sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))/omega )
+    pipi   = pipi + sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))*omega )
 
-  return corr/(2*L**2)
-
+  return phiphi/(2*L**2), pipi/(2*L**2)
 
 #########################################  readArray  #########################################
 # Takes a string representation of an array and removes the '[' and ']' characters
@@ -137,55 +118,32 @@ if args.file != None:
 inFile = inFile + ".txt"
 print "Input file: %s" %inFile
 
-L     = 10
-bc    = 'APBC'
-mass  = 0
 alpha = 1
-L_test, bc_x, bc_y, mass_test, alpha_test = readParams("input.txt")
+L, bc_x, bc_y, mass, alpha_test = readParams("input.txt")
 ###################################
 
-print "L_test     = %d" %L_test
+print "L          = %d" %L
 print "BC along x = %s" %bc_x
 print "BC along y = %s" %bc_y
-print "mass_test  = %f" %mass_test
+print "mass       = %f" %mass
 print "alpha_test = " + str(alpha_test)
 
 t1 = time.clock() #for timing
 
   
-filename = "EE_2D_" + bc + "_L" + str(L) + "_mass" + decimalStr(mass) + ".txt"
+filename = "EE_2D_%sx_%sy_L%d_mass%s.txt" %(bc_x,bc_y,L,decimalStr(mass))
 fout = open(filename, 'w')
 
-#LList = range(6,13)
-print 'L = ' + str(L)
-for LA_x in range(1,L):
-  print '  LA = ' + str(LA_x)
+LA_y     = L
+LA_x_max = (L+1)/2
+X_from0 = np.zeros((LA_x_max,LA_y))
+P_from0 = np.zeros((LA_x_max,LA_y))
+for x in range(LA_x_max):
+  for y in range(LA_y):
+    X_from0[x,y], P_from0[x,y] = getCorrelators_2d(L, bc_x, bc_y, mass, (0,0), (x,y))
 
-#  N = L*L
-#  #Calculate X and P matrices:
-#   X = np.matrix(np.zeros((N,N)))
-#   P = np.matrix(np.zeros((N,N)))
-#   for i in range(N):
-#     for j in range(i,N):
-#       ix = i%L
-#       iy = (i-ix)/L
-#       jx = j%L
-#       jy = (j-jx)/L
-#     
-#       X[i,j] = getPhiPhiCorrelator_2d(L, bc, mass, (ix,iy), (jx,jy))
-#       X[j,i] = X[i,j]
-#       P[i,j] = getPiPiCorrelator_2d(L, bc, mass, (ix,iy), (jx,jy))
-#       P[j,i] = P[i,j]
-#       #print "X[" + str(i) + "," + str(j) + "] = " + str(X[i,j])
-
-  #LA_x = L/2
-  LA_y = L
-  X_from0 = np.zeros((LA_x,LA_y))
-  P_from0 = np.zeros((LA_x,LA_y))
-  for x in range(LA_x):
-    for y in range(LA_y):
-      X_from0[x,y] = getPhiPhiCorrelator_2d(L, bc, mass, (0,0), (x,y))
-      P_from0[x,y] = getPiPiCorrelator_2d(L, bc, mass, (0,0), (x,y))
+for LA_x in range(1,LA_x_max+1):
+  print "\nLA = %d" %LA_x
 
   sitesA = np.zeros(LA_x*LA_y).tolist() #the indices of the sites in region A
   count = 0
@@ -193,9 +151,6 @@ for LA_x in range(1,L):
     for y in range(0,LA_y):
       sitesA[count] = y*L + x
       count = count + 1
-
-#   XA = X[sitesA][:,sitesA]
-#   PA = P[sitesA][:,sitesA]
   
   NA = len(sitesA)
   XA = np.zeros((NA,NA))
