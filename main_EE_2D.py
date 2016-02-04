@@ -1,5 +1,7 @@
 import argparse
 import numpy as np
+import os.path  #to check if file exists
+#import sys  #for sys.stdout.flush()
 import time
 import matplotlib.pyplot as plt
 
@@ -74,6 +76,52 @@ def getPiPiCorrelator_2d(L, bc, mass, r, rprime):
 
   return corr/(2*L**2)
 
+
+#########################################  readArray  #########################################
+# Takes a string representation of an array and removes the '[' and ']' characters
+###############################################################################################
+def readArray(line):
+  start = max( 0, line.find('[') )
+  end = min( len(line), line.find(']') )
+  return line[start+1:end] 
+####### end readArray(line) function #######
+
+########################################  readParams  #########################################
+# Reads in values from input file. Input should have the following form:
+#
+# L    = ___ (int)
+# bc_x = ___ (string: 'PBC' or 'APBC')
+# bc_y = ___ (string: 'PBC' or 'APBC')
+# mass = ___ (float)
+# alpha     = [ ___  ___  ___ ...] (list of floats in square brackets with items separated by spaces)
+###############################################################################################
+def readParams(filename):
+  L    = 1
+  bc_x = 'PBC'
+  bc_y = 'PBC'
+  massterm = 1
+  alpha    = [0]
+  if os.path.isfile(filename):
+    fin = open(filename,'r')
+    
+    line=fin.readline()
+    L = int(line[ max(0,line.find('='))+1:])
+    
+    line=fin.readline()
+    bc_x = line[ max(0,line.find('='))+1:].strip()
+    
+    line=fin.readline()
+    bc_y = line[ max(0,line.find('='))+1:].strip()
+    
+    line=fin.readline()
+    mass = float(line[ max(0,line.find('='))+1:])
+    
+    line=fin.readline()
+    alpha = [float(a) for a in readArray(line).split()]
+    
+    fin.close()
+  return L, bc_x, bc_y, mass, alpha
+
 ###############################################################################################
 ###########################################  main  ############################################
 ###############################################################################################
@@ -83,20 +131,27 @@ parser.add_argument('-f', '--file')
 args=parser.parse_args()
 
 ###### Read input from file: ######
-L     = 10
-bc    = 'APBC'
-mass  = 0
-alpha = 1
-#L, bc_x, bc_y, mass, alpha = readParams("input.txt")
-###################################
-
-t1 = time.clock() #for timing
-
 inFile = "input"
 if args.file != None:
   inFile = inFile + "_" + args.file
 inFile = inFile + ".txt"
-print inFile
+print "Input file: %s" %inFile
+
+L     = 10
+bc    = 'APBC'
+mass  = 0
+alpha = 1
+L_test, bc_x, bc_y, mass_test, alpha_test = readParams("input.txt")
+###################################
+
+print "L_test     = %d" %L_test
+print "BC along x = %s" %bc_x
+print "BC along y = %s" %bc_y
+print "mass_test  = %f" %mass_test
+print "alpha_test = " + str(alpha_test)
+
+t1 = time.clock() #for timing
+
   
 filename = "EE_2D_" + bc + "_L" + str(L) + "_mass" + decimalStr(mass) + ".txt"
 fout = open(filename, 'w')
