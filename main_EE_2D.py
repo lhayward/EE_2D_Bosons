@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 import os.path  #to check if file exists
-#import sys  #for sys.stdout.flush()
+import sys  #for sys.stdout.flush()
 import time
 import matplotlib.pyplot as plt
 
@@ -34,27 +34,37 @@ def omega_2d(kx, ky, mass):
 #    r, rprime: (x,y) coordinates on lattice of the two phi variables (floats)
 ###############################################################################################
 def getCorrelators_2d(L, bc_x, bc_y, mass, r, rprime):
+  bc_err = False
   (x,y) = r
   (xprime, yprime ) = rprime
   
   #BC along x:
   if bc_x == 'PBC':
     kx = (2*np.array(range(0,L)))*np.pi/L
-  else: #APBC along x
+  elif bc_x == 'APBC':
     kx = ( 2*np.array(range(0,L)) + 1)*np.pi/L
+  else:
+    kx = np.zeros(L)
+    print "*** Boundary condition %s along x is not supported ***" %bc_x
+    bc_err = True 
   
   #BC along y:
   if bc_y == 'PBC':
     ky = (2*np.array(range(0,L)))*np.pi/L
-  else: #APBC along y
+  elif bc_y == 'APBC':
     ky = ( 2*np.array(range(0,L)) + 1)*np.pi/L 
+  else:
+    kx = np.zeros(L)
+    print "*** Boundary condition %s along y is not supported ***" %bc_y
+    bc_err = True 
   
   phiphi = 0
   pipi   = 0
-  for kyy in ky:
-    omega = omega_2d(kx,kyy,mass)
-    phiphi = phiphi + sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))/omega )
-    pipi   = pipi + sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))*omega )
+  if not bc_err:
+    for kyy in ky:
+      omega = omega_2d(kx,kyy,mass)
+      phiphi = phiphi + sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))/omega )
+      pipi   = pipi + sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))*omega )
 
   return phiphi/(2*L**2), pipi/(2*L**2)
 
@@ -98,7 +108,7 @@ def readParams(filename):
     mass = float(line[ max(0,line.find('='))+1:])
     
     line=fin.readline()
-    alpha = [float(a) for a in readArray(line).split()]
+    alpha = np.array([float(a) for a in readArray(line).split()])
     
     fin.close()
   return L, bc_x, bc_y, mass, alpha
@@ -118,33 +128,36 @@ if args.file != None:
 inFile = inFile + ".txt"
 print "Input file: %s" %inFile
 
-alpha = 1
-L, bc_x, bc_y, mass, alpha_test = readParams("input.txt")
+L, bc_x, bc_y, mass, alpha = readParams(inFile)
 ###################################
 
 print "L          = %d" %L
 print "BC along x = %s" %bc_x
 print "BC along y = %s" %bc_y
 print "mass       = %f" %mass
-print "alpha_test = " + str(alpha_test)
+print "alpha      = " + str(alpha)
 
 t1 = time.clock() #for timing
 
-  
 filename = "EE_2D_%sx_%sy_L%d_mass%s.txt" %(bc_x,bc_y,L,decimalStr(mass))
 fout = open(filename, 'w')
 
 LA_y     = L
 LA_x_max = (L+1)/2
+
+#Calculate all needing correlators:
 X_from0 = np.zeros((LA_x_max,LA_y))
 P_from0 = np.zeros((LA_x_max,LA_y))
 for x in range(LA_x_max):
   for y in range(LA_y):
     X_from0[x,y], P_from0[x,y] = getCorrelators_2d(L, bc_x, bc_y, mass, (0,0), (x,y))
 
+#Loop over all cylinders:
 for LA_x in range(1,LA_x_max+1):
   print "\nLA = %d" %LA_x
+  sys.stdout.flush()
 
+  #Make a list of the sites in this region A:
   sitesA = np.zeros(LA_x*LA_y).tolist() #the indices of the sites in region A
   count = 0
   for x in range(0,LA_x):
@@ -152,6 +165,7 @@ for LA_x in range(1,LA_x_max+1):
       sitesA[count] = y*L + x
       count = count + 1
   
+  #Calculate XA and PA:
   NA = len(sitesA)
   XA = np.zeros((NA,NA))
   PA = np.zeros((NA,NA))
@@ -166,21 +180,28 @@ for LA_x in range(1,LA_x_max+1):
       XA[iA,jA] = X_from0[abs(xj-xi),abs(yj-yi)]
       PA[iA,jA] = P_from0[abs(xj-xi),abs(yj-yi)]
   
-  
+  #Calculate the matrix CA and its eigenvalues:
   CA_sq = np.matrix(XA)*np.matrix(PA)
   Ev = np.sqrt(np.linalg.eigvals(CA_sq)) #spectrum of eigenvalues of CA_sq
-
-  S_alpha = 0
   Ev_new = np.array([e.real for e in Ev if (e.real - 1./2.)>0])
-  #Ev_new = np.array([e for e in Ev if (e - 1./2.)>0])
-  if alpha == 1:
-    S_alpha = np.sum( (Ev_new+1./2)*np.log(Ev_new+1./2.) - (Ev_new-1./2.)*np.log(Ev_new-1./2) )
-    #S_alpha = np.sum( (Ev+1./2)*np.log(Ev+1./2.) - (Ev-1./2.)*np.log(Ev-1./2) )
-  else:
-    S_alpha = 1.0/(alpha-1.0)*np.sum( np.log( (Ev_new+1./2)**alpha - (Ev_new-1./2.)**alpha ) )
-    #S_alpha = 1.0/(alpha-1.0)*np.sum( np.log( (Ev+1./2)**alpha - (Ev-1./2.)**alpha ) )
+  
+  #Calculate the EE for each alpha:
+  S_alpha = np.zeros(len(alpha))
+  for i, n in enumerate(alpha):
+    if n == 1:
+      S_alpha[i] = np.sum( (Ev_new+1./2)*np.log(Ev_new+1./2.) - (Ev_new-1./2.)*np.log(Ev_new-1./2) )
+    else:
+      S_alpha[i] = 1.0/(n-1.0)*np.sum( np.log( (Ev_new+1./2)**n - (Ev_new-1./2.)**n ) )
+  #end alpha loop
   print "  " + str(S_alpha)
-  fout.write("%d %.15f"%(LA_x,S_alpha)+'\n')  #Save result to file
+  
+  #Save results to file:
+  fout.write("%d" %LA_x)
+  for Sn in S_alpha:
+    fout.write(" %.15f" %Sn)
+  fout.write("\n")
+  fout.flush()
+#End loop over cylinders
 
 fout.close()
 
