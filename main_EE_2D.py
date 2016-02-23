@@ -27,7 +27,7 @@ def omega_2d(kx, ky, mass):
 #####################################  getCorrelators_2d  #####################################
 # Calculates the phi-phi and pi-pi correlator for a 2D free bosonic system
 # Input paramters: 
-#    L: length of lattice (integer)
+#    L: (Lx, Ly) lengths of lattice (tuple of integers)
 #    bc_x: boundary conditions along x ('PBC' or 'APBC')
 #    bc_y: boundary conditions along y ('PBC' or 'APBC')
 #    mass: boson mass (float)
@@ -35,26 +35,27 @@ def omega_2d(kx, ky, mass):
 ###############################################################################################
 def getCorrelators_2d(L, bc_x, bc_y, mass, r, rprime):
   bc_err = False
+  (Lx,Ly)=L
   (x,y) = r
   (xprime, yprime ) = rprime
   
   #BC along x:
   if bc_x == 'PBC':
-    kx = (2*np.array(range(0,L)))*np.pi/L
+    kx = (2*np.array(range(0,Lx)))*np.pi/Lx
   elif bc_x == 'APBC':
-    kx = ( 2*np.array(range(0,L)) + 1)*np.pi/L
+    kx = ( 2*np.array(range(0,Lx)) + 1)*np.pi/Lx
   else:
-    kx = np.zeros(L)
+    kx = np.zeros(Lx)
     print "*** Boundary condition %s along x is not supported ***" %bc_x
     bc_err = True 
   
   #BC along y:
   if bc_y == 'PBC':
-    ky = (2*np.array(range(0,L)))*np.pi/L
+    ky = (2*np.array(range(0,Ly)))*np.pi/Ly
   elif bc_y == 'APBC':
-    ky = ( 2*np.array(range(0,L)) + 1)*np.pi/L 
+    ky = ( 2*np.array(range(0,Ly)) + 1)*np.pi/Ly 
   else:
-    kx = np.zeros(L)
+    kx = np.zeros(Ly)
     print "*** Boundary condition %s along y is not supported ***" %bc_y
     bc_err = True 
   
@@ -66,7 +67,7 @@ def getCorrelators_2d(L, bc_x, bc_y, mass, r, rprime):
       phiphi = phiphi + sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))/omega )
       pipi   = pipi + sum( np.cos(kx*(x-xprime))*np.cos(kyy*(y-yprime))*omega )
 
-  return phiphi/(2*L**2), pipi/(2*L**2)
+  return phiphi/(2*Lx*Ly), pipi/(2*Lx*Ly)
 
 #########################################  readArray  #########################################
 # Takes a string representation of an array and removes the '[' and ']' characters
@@ -80,14 +81,16 @@ def readArray(line):
 ########################################  readParams  #########################################
 # Reads in values from input file. Input should have the following form:
 #
-# L    = ___ (int)
+# Lx   = ___ (int)
+# Ly   = ___ (int)
 # bc_x = ___ (string: 'PBC' or 'APBC')
 # bc_y = ___ (string: 'PBC' or 'APBC')
 # mass = ___ (float)
 # alpha     = [ ___  ___  ___ ...] (list of floats in square brackets with items separated by spaces)
 ###############################################################################################
 def readParams(filename):
-  L    = 1
+  Lx   = 1
+  Ly   = 1
   bc_x = 'PBC'
   bc_y = 'PBC'
   massterm = 1
@@ -96,7 +99,10 @@ def readParams(filename):
     fin = open(filename,'r')
     
     line=fin.readline()
-    L = int(line[ max(0,line.find('='))+1:])
+    Lx = int(line[ max(0,line.find('='))+1:])
+    
+    line=fin.readline()
+    Ly = int(line[ max(0,line.find('='))+1:])
     
     line=fin.readline()
     bc_x = line[ max(0,line.find('='))+1:].strip()
@@ -111,7 +117,7 @@ def readParams(filename):
     alpha = np.array([float(a) for a in readArray(line).split()])
     
     fin.close()
-  return L, bc_x, bc_y, mass, alpha
+  return Lx, Ly, bc_x, bc_y, mass, alpha
 
 ###############################################################################################
 ###########################################  main  ############################################
@@ -128,10 +134,11 @@ if args.file != None:
 inFile = inFile + ".txt"
 print "Input file: %s" %inFile
 
-L, bc_x, bc_y, mass, alpha = readParams(inFile)
+Lx, Ly, bc_x, bc_y, mass, alpha = readParams(inFile)
 ###################################
 
-print "L          = %d" %L
+print "Lx         = %d" %Lx
+print "Ly         = %d" %Ly
 print "BC along x = %s" %bc_x
 print "BC along y = %s" %bc_y
 print "mass       = %f" %mass
@@ -139,18 +146,18 @@ print "alpha      = " + str(alpha)
 
 t1 = time.clock() #for timing
 
-filename = "EE_2D_%sx_%sy_L%d_mass%s.txt" %(bc_x,bc_y,L,decimalStr(mass))
+filename = "EE_2D_%sx_%sy_Lx%d_Ly%d_mass%s.txt" %(bc_x,bc_y,Lx,Ly,decimalStr(mass))
 fout = open(filename, 'w')
 
-LA_y     = L
-LA_x_max = (L+1)/2
+LA_y     = Ly
+LA_x_max = (Lx)/2
 
 #Calculate all needing correlators:
 X_from0 = np.zeros((LA_x_max,LA_y))
 P_from0 = np.zeros((LA_x_max,LA_y))
 for x in range(LA_x_max):
   for y in range(LA_y):
-    X_from0[x,y], P_from0[x,y] = getCorrelators_2d(L, bc_x, bc_y, mass, (0,0), (x,y))
+    X_from0[x,y], P_from0[x,y] = getCorrelators_2d((Lx, Ly), bc_x, bc_y, mass, (0,0), (x,y))
 
 #Loop over all cylinders:
 for LA_x in range(1,LA_x_max+1):
@@ -162,7 +169,7 @@ for LA_x in range(1,LA_x_max+1):
   count = 0
   for x in range(0,LA_x):
     for y in range(0,LA_y):
-      sitesA[count] = y*L + x
+      sitesA[count] = y*Lx + x
       count = count + 1
   
   #Calculate XA and PA:
@@ -171,11 +178,11 @@ for LA_x in range(1,LA_x_max+1):
   PA = np.zeros((NA,NA))
   for iA, sitei in enumerate(sitesA):
     for jA, sitej in enumerate(sitesA): 
-      xi = sitei%L
-      yi = (sitei-xi)/L
+      xi = sitei%Lx
+      yi = (sitei-xi)/Lx
       
-      xj = sitej%L
-      yj = (sitej-xj)/L
+      xj = sitej%Lx
+      yj = (sitej-xj)/Lx
       
       XA[iA,jA] = X_from0[abs(xj-xi),abs(yj-yi)]
       PA[iA,jA] = P_from0[abs(xj-xi),abs(yj-yi)]
