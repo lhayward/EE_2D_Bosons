@@ -3,7 +3,7 @@ import numpy as np
 import os.path  #to check if file exists
 import sys  #for sys.stdout.flush()
 import time
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 ########################################  decimalStr  #########################################
 # Converts a number to a string and replaces all commas with hyphens
@@ -143,10 +143,13 @@ print "BC along x = %s" %bc_x
 print "BC along y = %s" %bc_y
 print "mass       = %f" %mass
 print "alpha      = " + str(alpha)
+sys.stdout.flush()
 
 t1 = time.clock() #for timing
 
 filename = "EE_2D_%sx_%sy_Lx%d_Ly%d_mass%s.txt" %(bc_x,bc_y,Lx,Ly,decimalStr(mass))
+if Lx == Ly:
+  filename = "EE_2D_%sx_%sy_L%d_mass%s.txt" %(bc_x,bc_y,Lx,decimalStr(mass))
 fout = open(filename, 'w')
 
 LA_y     = Ly
